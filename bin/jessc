@@ -1,7 +1,5 @@
 #!/usr/bin/env node
 return (function(){
-  var probe = require('probe').probe;
-  
   var posix = require('posix'),
       acquire = require('/Users/elliottcable/Code/poopy.js/lib/acquire').acquire,
       jess = acquire.absolute('/Users/elliottcable/Code/JESS/lib/jess.js').wait();
@@ -39,19 +37,12 @@ return (function(){
                   sourceFileName = sourcePathBits[sourcePathBits.length - 1],
                   destinationFileName;
               
-              probe(sourcePathBits, 'sourcePathBits');
-              probe(sourceFileName, 'sourceFileName');
-              
               // Why don’t we have splice() on String? I mean, I wouldn’t
               // exactly expect something as easy as Ruby’s #gsub, but… come
               // on. We have splice() on Array, even! )-:<
               var idx = sourceFileName.indexOf(".jess");
               if (idx) { destinationFileName = sourceFileName.slice(0, idx) + ".js"
                 + sourceFileName.slice(idx + 5, sourceFileName.length) };
-              
-              probe(idx, 'idx');
-              probe(destinationFileName, 'destinationFileName');
-              
               
               var destinationFile = destinationPath + '/' + destinationFileName;
             } else { var destinationFile = destinationPath };
