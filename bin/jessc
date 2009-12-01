@@ -20,6 +20,8 @@ return (function(){
     var compilation = new(process.Promise),
         sourcePaths = Array.prototype.slice.apply(arguments, [0]),
         destinationPath, me = arguments.callee;
+    
+    // TODO: Move the path resolution into its own method, to re-use in `jess`
     if (sourcePaths.length < 1) { throw new(Error)("No source paths given") };
     if (sourcePaths.length > 1) { destinationPath = sourcePaths.pop() }
                            else { destinationPath = process.cwd() };
