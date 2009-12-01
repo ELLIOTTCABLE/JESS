@@ -1,0 +1,127 @@
+#!/usr/bin/env node
+return (function(){
+  var probe = require('probe').probe;
+  
+  var posix = require('posix'),
+      acquire = require('/Users/elliottcable/Code/poopy.js/lib/acquire').acquire,
+      jess = acquire.absolute('/Users/elliottcable/Code/JESS/lib/jess.js').wait();
+  
+  var jessc = {};
+  
+  // Either accepts a list of source files and a destination, or a single
+  // source file and (optional) destination. E.g.
+  // 
+  //     jessc file.jess      # equivalent to jessc file.jess file.js
+  //     jessc file.jess compiled/file.js
+  //     jessc something.jess else.jess an_executable compiled/
+  //     jessc lib/*.jess lib/
+  // 
+  jessc['compileFile'] = function () {
+    var compilation = new(process.Promise),
+        sourcePaths = Array.prototype.slice.apply(arguments, [0]),
+        destinationPath, me = arguments.callee;
+    if (sourcePaths.length < 1) { throw new(Error)("No source paths given") };
+    if (sourcePaths.length > 1) { destinationPath = sourcePaths.pop() }
+                           else { destinationPath = process.cwd() };
+    if (destinationPath[0] !== '/') {
+      destinationPath = process.cwd() + '/' + destinationPath };
+    
+    sourcePath = sourcePaths.shift();
+    
+    posix.stat(sourcePath)
+      .addCallback(function (source) {
+        posix.stat(destinationPath)
+          .addCallback(function (destination) {
+            if (!destination.isFile()) {
+              var sourcePathBits = sourcePath.split('/'),
+                  sourceFileName = sourcePathBits[sourcePathBits.length - 1],
+                  destinationFileName;
+              
+              probe(sourcePathBits, 'sourcePathBits');
+              probe(sourceFileName, 'sourceFileName');
+              
+              // Why don’t we have splice() on String? I mean, I wouldn’t
+              // exactly expect something as easy as Ruby’s #gsub, but… come
+              // on. We have splice() on Array, even! )-:<
+              var idx = sourceFileName.indexOf(".jess");
+              if (idx) { destinationFileName = sourceFileName.slice(0, idx) + ".js"
+                + sourceFileName.slice(idx + 5, sourceFileName.length) };
+              
+              probe(idx, 'idx');
+              probe(destinationFileName, 'destinationFileName');
+              
+              
+              var destinationFile = destinationPath + '/' + destinationFileName;
+            } else { var destinationFile = destinationPath };
+            process.stdio.write("Processing ["+sourcePath+"] → ["+destinationFile+"]" + '\n');
+            
+            posix.open(destinationFile,
+              process.O_WRONLY |process.O_CREAT |process.O_TRUNC, source.mode)
+              .addCallback(function (fd) {
+                posix.cat(sourcePath)
+                  .addCallback(function (content) {
+                    content = jess.process(content);
+                    posix.write(fd, content, null, "utf8")
+                      .addCallback(function (written) {
+                        if (written !== content.length) {
+                          throw new(Error)(
+                            "Write to destination file partially failed (" +
+                              written + " of " + content.length + ")")
+                        } else {
+                          if (sourcePaths.length < 1) {
+                            // FIXME: Only the *last* compiled source will be
+                            //        passed. Should we, like, I dunno… pass
+                            //        around an array of compiled sources? /-:
+                            //        But that seems retarded. And
+                            //        inefficient.
+                            compilation.emitSuccess(content) }
+                          else {
+                            sourcePaths.push(destinationPath);
+                            me.apply(this, sourcePaths);
+                          }
+                        }
+                      })
+                      .addErrback(function () {
+                        throw new(Error)("Cannot write to destination file") });
+                  })
+                  .addErrback(function () {
+                    throw new(Error)("Cannot read source file") })
+              })
+              .addErrback(function () {
+                throw new(Error)("Cannot open destination file") });
+          })
+          .addErrback(function () {
+            // This clusterfuck creates the destination as a file, and then
+            // recurses upon itself to fall into the above callback.
+            // FIXME: This is really messy; we’re creating the file, and then
+            //        truncating it in the above callback… seems inefficient.
+            posix.open(destinationPath, process.O_CREAT, source.mode)
+              .addCallback(function (fd) {
+                posix.close(fd)
+                  .addCallback(function () {
+                    sourcePaths.unshift(sourcePath);
+                    sourcePaths.push(destinationPath);
+                    me.apply(this, sourcePaths);
+                  })
+                  .addErrback(function () {
+                    throw new(Error)("Cannot close destination file") });
+              })
+              .addErrback(function () {
+                throw new(Error)("Cannot create file at destination") });
+          })
+      })
+      .addErrback(function () {
+        throw new(Error)("Source file doesn’t exist") });
+    
+    
+    return compilation;
+  };
+  
+  // FIXME: Why doesn’t this work with wait()? Why *does* it work without?
+  if (process.ARGV[1] === __filename) {
+    jessc.compileFile.apply(jessc,
+      Array.prototype.slice.apply(process.ARGV, [0])
+        .splice(2, process.ARGV.length - 2) ) };
+  
+  return jessc;
+})()
